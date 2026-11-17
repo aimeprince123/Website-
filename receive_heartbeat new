@@ -1,0 +1,108 @@
+
+<?php
+header("Content-Type: application/json; charset=UTF-8");
+
+require_once "db.php";
+
+// Must match the API key in your ESP32 code.
+$apiKey = "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET";
+
+// Check the API key.
+$receivedKey = $_SERVER["HTTP_X_API_KEY"] ?? "";
+
+if (!hash_equals($apiKey, $receivedKey)) {
+    http_response_code(401);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Invalid API key"
+    ]);
+    exit;
+}
+
+// Accept POST requests only.
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    http_response_code(405);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "POST requests only"
+    ]);
+    exit;
+}
+
+// Read the JSON body sent by the ESP32.
+$rawData = file_get_contents("php://input");
+$data = json_decode($rawData, true);
+
+// Check whether the JSON is valid.
+if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
+    http_response_code(400);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Invalid JSON"
+    ]);
+    exit;
+}
+
+// Get the heartbeat and IR values.
+$bpm = filter_var($data["bpm"] ?? null, FILTER_VALIDATE_FLOAT);
+$irValue = filter_var(
+    $data["ir_value"] ?? null,
+    FILTER_VALIDATE_INT
+);
+
+// Validate the input.
+if (
+    $bpm === false ||
+    $bpm === null ||
+    $bpm <= 0 ||
+    $bpm > 250 ||
+    $irValue === false ||
+    $irValue === null ||
+    $irValue < 0
+) {
+    http_response_code(400);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Invalid BPM or IR value"
+    ]);
+    exit;
+}
+
+try {
+    $sql = "INSERT INTO heartbeat_readings
+            (bpm, ir_value, wifi_status, call_status, call_number)
+            VALUES
+            (:bpm, :ir_value, :wifi_status, :call_status, :call_number)";
+
+    $stmt = $pdo->prepare($sql);
+
+    $stmt->execute([
+        ":bpm" => $bpm,
+        ":ir_value" => $irValue,
+        ":wifi_status" => "Connected",
+        ":call_status" => "No call",
+        ":call_number" => null
+    ]);
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Heartbeat reading saved",
+        "id" => $pdo->lastInsertId(),
+        "bpm" => $bpm,
+        "ir_value" => $irValue
+    ]);
+
+} catch (PDOException $e) {
+    error_log($e->getMessage());
+    http_response_code(500);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Could not save heartbeat reading"
+    ]);
+}
+?>
