@@ -1,0 +1,205 @@
+
+<?php
+require_once "db.php";
+
+try {
+    $stmt = $pdo->query(
+        "SELECT id, bpm, ir_value, wifi_status,
+                call_status, call_number, created_at
+         FROM heartbeat_readings
+         ORDER BY id DESC
+         LIMIT 50"
+    );
+
+    $readings = $stmt->fetchAll();
+
+} catch (PDOException $e) {
+    error_log($e->getMessage());
+    die("Unable to load heartbeat readings.");
+}
+
+$latest = $readings[0] ?? null;
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
+
+    <title>Heartbeat Monitoring Dashboard</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 25px;
+            font-family: Arial, sans-serif;
+            background: #eef3f8;
+            color: #263238;
+        }
+
+        h1 {
+            text-align: center;
+            color: #123c69;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .card {
+            background: white;
+            padding: 22px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #00000012;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #526575;
+        }
+
+        .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #087f8c;
+            overflow-wrap: anywhere;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #123c69;
+            color: white;
+        }
+
+        tr:hover {
+            background: #f1f7fc;
+        }
+
+        .note {
+            color: #526575;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Heartbeat Monitoring Dashboard</h1>
+
+    <p class="note">
+        Latest saved readings from the ESP32 and MAX30102 sensor.
+        This page refreshes every 5 seconds.
+    </p>
+
+    <div class="summary">
+        <div class="card">
+            <h3>Latest Heart Rate</h3>
+            <div class="value">
+                <?= $latest
+                    ? htmlspecialchars($latest["bpm"]) . " BPM"
+                    : "No data" ?>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Wi-Fi Status</h3>
+            <div class="value" style="font-size:22px">
+                <?= $latest
+                    ? htmlspecialchars($latest["wifi_status"] ?? "Unknown")
+                    : "Unknown" ?>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Call Status</h3>
+            <div class="value" style="font-size:22px">
+                <?= $latest
+                    ? htmlspecialchars($latest["call_status"] ?? "Unknown")
+                    : "Unknown" ?>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Call Number</h3>
+            <div class="value" style="font-size:20px">
+                <?= $latest && $latest["call_number"]
+                    ? htmlspecialchars($latest["call_number"])
+                    : "Not set" ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <h2>Heartbeat History</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>BPM</th>
+                    <th>IR Value</th>
+                    <th>Wi-Fi Status</th>
+                    <th>Call Status</th>
+                    <th>Call Number</th>
+                    <th>Date and Time</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <?php if (empty($readings)): ?>
+                    <tr>
+                        <td colspan="7">No heartbeat readings received yet.</td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($readings as $row): ?>
+                        <tr>
+                            <td><?= (int) $row["id"] ?></td>
+                            <td><?= htmlspecialchars($row["bpm"]) ?></td>
+                            <td><?= htmlspecialchars(
+                                (string) ($row["ir_value"] ?? "N/A")
+                            ) ?></td>
+                            <td><?= htmlspecialchars(
+                                $row["wifi_status"] ?? "Unknown"
+                            ) ?></td>
+                            <td><?= htmlspecialchars(
+                                $row["call_status"] ?? "Unknown"
+                            ) ?></td>
+                            <td><?= htmlspecialchars(
+                                $row["call_number"] ?? "Not set"
+                            ) ?></td>
+                            <td><?= htmlspecialchars($row["created_at"]) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+</body>
+</html>
